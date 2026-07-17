@@ -2,7 +2,7 @@
     <!-- LAN 대전: 같은 Wi-Fi에서 소켓 통신과 방 찾기(UDP)에 필요 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Mahjong Joy"
+        android:label="마작한판"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

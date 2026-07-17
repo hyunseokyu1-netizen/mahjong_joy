@@ -25,6 +25,7 @@ Strings stringsOf(AppLang lang) => switch (lang) {
 /// 화면 문자열 모음. 템플릿의 {자리표시자}는 메서드가 채운다.
 class Strings {
   // 홈
+  final String appTitle;
   final String tagline;
   final String playWithAi;
   final String playWithFriends;
@@ -50,6 +51,7 @@ class Strings {
   final String _decidingFmt; // {name}
   final String _playerLeftFmt; // {name}
   final String _playerRejoinedFmt; // {name}
+  final String _claimedByFmt; // {name}
   final String roomFull;
 
   // 게임 화면
@@ -120,6 +122,7 @@ class Strings {
   final String headLabel;
 
   const Strings({
+    required this.appTitle,
     required this.tagline,
     required this.playWithAi,
     required this.playWithFriends,
@@ -143,6 +146,7 @@ class Strings {
     required this._decidingFmt,
     required this._playerLeftFmt,
     required this._playerRejoinedFmt,
+    required this._claimedByFmt,
     required this.roomFull,
     required this.playerNames,
     required this.homeTooltip,
@@ -212,6 +216,8 @@ class Strings {
   String playerRejoined(String name) =>
       _playerRejoinedFmt.replaceAll('{name}', name);
 
+  String claimedBy(String name) => _claimedByFmt.replaceAll('{name}', name);
+
   String roundOf(int current, int total) =>
       _roundFmt.replaceAll('{c}', '$current').replaceAll('{t}', '$total');
 
@@ -247,13 +253,14 @@ class Strings {
 }
 
 const _ko = Strings(
-  tagline: '마작 조이 — 짝 맞추기의 재미만 남긴 심플 마작',
+  appTitle: '마작한판',
+  tagline: '마작한판 — 진짜로 겨루는 4인 마작',
   playWithAi: 'AI와 하기',
   playWithFriends: '친구와 하기',
   howToPlayBtn: '게임 설명서 📖',
   languageLabel: '언어',
   beginnerTitle: '초보자 모드',
-  beginnerSubtitle: '점수 없이 짝 맞추기만 즐겨요',
+  beginnerSubtitle: '점수 없이 조합만 맞춰요',
   yourName: '내 이름',
   createRoom: '방 만들기',
   findRooms: '방 찾기',
@@ -270,6 +277,7 @@ const _ko = Strings(
   decidingFmt: '{name} 고르는 중...',
   playerLeftFmt: '👋 {name}님이 나갔어요 — AI가 이어서 둘게요',
   playerRejoinedFmt: '🎉 {name}님이 돌아왔어요!',
+  claimedByFmt: '🀄 {name}님이 먼저 가져갔어요',
   roomFull: '방이 가득 찼어요',
   playerNames: ['나', '토끼', '곰돌이', '야옹이'],
   homeTooltip: '메인으로',
@@ -370,13 +378,14 @@ const _ko = Strings(
 );
 
 const _en = Strings(
-  tagline: 'Mahjong Joy — simple mahjong, just the fun of matching',
+  appTitle: 'Mahjong Round',
+  tagline: 'Mahjong Round — real 4-player mahjong, simple scoring',
   playWithAi: 'Play with AI',
   playWithFriends: 'Play with Friends',
   howToPlayBtn: 'How to Play 📖',
   languageLabel: 'Language',
   beginnerTitle: 'Beginner Mode',
-  beginnerSubtitle: 'No scoring — just match and win',
+  beginnerSubtitle: 'No scoring — just build sets and win',
   yourName: 'Your Name',
   createRoom: 'Create Room',
   findRooms: 'Find Rooms',
@@ -393,6 +402,7 @@ const _en = Strings(
   decidingFmt: '{name} is deciding...',
   playerLeftFmt: '👋 {name} left — AI will take over',
   playerRejoinedFmt: '🎉 {name} is back!',
+  claimedByFmt: '🀄 {name} got it first',
   roomFull: 'The room is full',
   playerNames: ['Me', 'Rabbit', 'Teddy', 'Kitty'],
   homeTooltip: 'Main menu',
@@ -498,13 +508,14 @@ const _en = Strings(
 );
 
 const _zh = Strings(
-  tagline: '麻将乐 — 只留下配对乐趣的简单麻将',
+  appTitle: '一局麻将',
+  tagline: '一局麻将 — 真正的4人麻将对局',
   playWithAi: '和AI玩',
   playWithFriends: '和朋友玩',
   howToPlayBtn: '游戏说明 📖',
   languageLabel: '语言',
   beginnerTitle: '新手模式',
-  beginnerSubtitle: '不计分，只享受配对',
+  beginnerSubtitle: '不计分，只专心组牌',
   yourName: '我的名字',
   createRoom: '创建房间',
   findRooms: '查找房间',
@@ -521,6 +532,7 @@ const _zh = Strings(
   decidingFmt: '{name}正在选择...',
   playerLeftFmt: '👋 {name}退出了 — 由AI接管',
   playerRejoinedFmt: '🎉 {name}回来了！',
+  claimedByFmt: '🀄 {name}先拿走了',
   roomFull: '房间已满',
   playerNames: ['我', '兔子', '小熊', '小猫'],
   homeTooltip: '回主页',

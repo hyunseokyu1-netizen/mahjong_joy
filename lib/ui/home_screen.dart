@@ -34,9 +34,9 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const Text('🀄', style: TextStyle(fontSize: 80)),
                 const SizedBox(height: 8),
-                const Text(
-                  'Mahjong Joy',
-                  style: TextStyle(
+                Text(
+                  s.appTitle,
+                  style: const TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.w800,
                     color: Palette.textBrown,

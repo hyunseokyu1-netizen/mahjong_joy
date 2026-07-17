@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
 
 import '../ai/simple_ai.dart';
 import '../logic/claim.dart';
@@ -32,8 +35,10 @@ class NetHostController extends TableController {
     required this.hostName,
     this.simpleModeOn = false,
     this.aiDelay = const Duration(milliseconds: 600),
-    this.claimDelay = const Duration(milliseconds: 350),
+    this.claimDelay = Duration.zero,
     this.claimTimeout = const Duration(seconds: 15),
+    this.discardTimeout = turnTimeLimit,
+    this.aiClaimThinkMax = const Duration(seconds: 13),
   }) {
     names[0] = hostName;
   }
@@ -41,13 +46,30 @@ class NetHostController extends TableController {
   final String hostName;
   final bool simpleModeOn;
   final Duration aiDelay;
+
+  /// AI끼리만 경쟁하는 완성/뺏어오기(사람이 전혀 관여하지 않는 라운드)를
+  /// 확정하기 전 대기시간. 아무도 보고 있지 않은 결정이므로 굳이 늦출
+  /// 이유가 없어 기본값은 0이다.
   final Duration claimDelay;
 
-  /// 완성/뺏어오기 응답 제한시간. 지나면 전원 자동 패스 처리해
-  /// 한 사람 때문에 게임이 멈추지 않게 한다.
+  /// 사람/네트워크 참가자와 AI가 같은 패를 동시에 노릴 때, AI가 응답을
+  /// "숨기고 고민하는" 시간의 최댓값(무작위, 최소 500ms부터). AI가 항상
+  /// 즉시 반응해 사람보다 먼저 채가는 것처럼 보이지 않도록 하기 위함.
+  /// [Duration.zero]로 주면 기존처럼 AI가 즉시 응답한다(테스트용).
+  final Duration aiClaimThinkMax;
+
+  /// 완성/뺏어오기 응답 제한시간. 지나면 응답 안 한 사람만 자동 패스
+  /// 처리해 한 사람 때문에 게임이 멈추지 않게 한다.
   final Duration claimTimeout;
 
+  /// 버리기 응답 제한시간(사람/네트워크 좌석 전용). 지나면 방금 뽑은
+  /// 패(뺏어온 직후처럼 뽑은 패가 없으면 AI 추천 패)를 자동으로 버려
+  /// 진행을 이어간다. 로컬 AI 대전에는 적용되지 않는다(항상 즉시 응답
+  /// 가능하므로).
+  final Duration discardTimeout;
+
   final SimpleAi _ai = SimpleAi();
+  final Random _random = Random();
 
   /// 좌석별 이름. null = AI(또는 빈 좌석).
   final List<String?> names = [null, null, null, null];
@@ -78,6 +100,24 @@ class NetHostController extends TableController {
   final Set<int> _awaiting = {};
   Timer? _claimTimer;
 
+  /// 사람/네트워크 좌석의 버리기 대기 타이머. (좌석, 뽑을 때의 남은 패
+  /// 수)로 지금 기다리는 턴을 식별해, 같은 턴에 중복으로 타이머를
+  /// 새로 걸지 않는다.
+  Timer? _discardTimer;
+  (int, int)? _discardWaitKey;
+
+  /// 사람/네트워크 참가자와 경쟁 중이라 무작위 고민 시간을 부여받은
+  /// AI 좌석들의 타이머. 라운드가 끝나거나 dispose되면 모두 취소한다.
+  final List<Timer> _aiThinkTimers = [];
+
+  /// "먼저 응답한 사람이 가져간다" 판정을 위해, 사람/네트워크 참가자가
+  /// 하나라도 경쟁 중인 라운드에서 가장 먼저 도착한 뺏어오기(비완성)
+  /// 응답을 기억해둔다. 완성 가능자가 아직 다 응답하지 않았다면 이
+  /// 응답보다 나중에 온 완성 선언이 있어도 그게 우선해야 하므로 곧바로
+  /// 확정하지 않고 기록만 해둔다(완성은 뺏어오기보다 항상 우선).
+  int? _leadingClaimSeat;
+  Meld? _leadingClaimMeld;
+
   int _generation = 0;
   bool _driving = false;
   bool _disposed = false;
@@ -85,6 +125,12 @@ class NetHostController extends TableController {
   int? _drawSoundWall;
 
   int? get port => _server?.port;
+
+  /// 테스트 전용: `game`을 직접 조작해 만든 상황을 심판 루프가
+  /// 인식하게 한다 (여러 명이 동시에 클레임 대상인 상황 등, 실제
+  /// 대국으로는 재현하기 번거로운 경우를 테스트하기 위함).
+  @visibleForTesting
+  void debugPoke() => _drive();
 
   int get humanCount => 1 + _clients.length;
 
@@ -190,6 +236,9 @@ class NetHostController extends TableController {
       _announce(TableNoticeKind.left, lostName);
     }
     names[seat] = null; // 복귀 전까지 이 좌석은 AI가 이어받는다
+    if (started && game.current == seat) {
+      _clearDiscardTimer(); // 이제 AI가 대신 버림
+    }
     if (!started) {
       _broadcastLobby();
       notifyListeners();
@@ -220,6 +269,21 @@ class NetHostController extends TableController {
     }
   }
 
+  /// 여러 명이 동시에 뺏어오기/완성 기회를 받았을 때, 실제로 가져간
+  /// 사람을 방 전체에 알린다. 좌석 번호는 받는 사람 시점으로 회전해
+  /// 보내고, 표시 이름은 각자 UI가 언어에 맞게 붙인다.
+  void _announceClaim(int actualSeat) {
+    final n = names.length;
+    int rot(int seat, int forSeat) => (seat - forSeat + n) % n;
+    notice.value = TableNotice(TableNoticeKind.claimed, '', seat: actualSeat);
+    for (final entry in _clients.entries) {
+      sendJson(
+        entry.value.socket,
+        eventMessage('claimed', '', seat: rot(actualSeat, entry.key)),
+      );
+    }
+  }
+
   /// 대국 시작 (재시작 포함). 빈 좌석은 AI.
   void startGame() {
     started = true;
@@ -237,6 +301,11 @@ class NetHostController extends TableController {
     _responses = null;
     _awaiting.clear();
     _claimTimer?.cancel();
+    _discardTimer?.cancel();
+    _discardWaitKey = null;
+    _cancelAiThinkTimers();
+    _leadingClaimSeat = null;
+    _leadingClaimMeld = null;
     _resultApplied = false;
     _notifyBroadcast();
     _drive();
@@ -255,6 +324,9 @@ class NetHostController extends TableController {
 
   @override
   List<int> get claimWaitingSeats => _awaiting.toList();
+
+  @override
+  Duration? get discardTimeLimit => discardTimeout;
 
   @override
   bool get isFinished => game.phase == GamePhase.finished;
@@ -281,6 +353,7 @@ class NetHostController extends TableController {
   @override
   void humanDiscard(Tile tile) {
     if (!isHumanDiscardTurn) return;
+    _clearDiscardTimer();
     game.discard(tile);
     SoundService.instance.tap();
     _notifyBroadcast();
@@ -290,6 +363,7 @@ class NetHostController extends TableController {
   @override
   void humanTsumo() {
     if (!canHumanTsumo) return;
+    _clearDiscardTimer();
     game.declareTsumo();
     _notifyBroadcast();
   }
@@ -330,6 +404,7 @@ class NetHostController extends TableController {
               _drawSoundWall = game.wallCount;
               SoundService.instance.draw();
             }
+            _armDiscardTimer();
             return; // 사람 입력 대기 (호스트 UI 또는 소켓)
           }
           await Future<void>.delayed(aiDelay);
@@ -360,12 +435,58 @@ class NetHostController extends TableController {
     }
   }
 
+  /// 사람/네트워크 좌석의 버리기 차례가 되면 제한시간 타이머를 건다.
+  /// 같은 턴에 대해 이미 걸려 있으면 다시 걸지 않는다.
+  void _armDiscardTimer() {
+    final key = (game.current, game.wallCount);
+    if (_discardWaitKey == key) return;
+    _discardWaitKey = key;
+    _discardTimer?.cancel();
+    _discardTimer = Timer(discardTimeout, () => _onDiscardTimeout(key));
+  }
+
+  void _clearDiscardTimer() {
+    _discardTimer?.cancel();
+    _discardTimer = null;
+    _discardWaitKey = null;
+  }
+
+  /// 제한시간 초과: 방금 뽑은 패를 그대로 버려 진행을 이어간다.
+  /// 뺏어온 직후라 뽑은 패가 없으면 AI 추천 패를 대신 버린다 — 이
+  /// 경우에도 안 버리고 버티면 방 전체가 멈추는 건 마찬가지이므로.
+  /// 혼자 안 내고 있는 사람 때문에 네트워크 대전 전체가 멈추는 것을 막는다.
+  void _onDiscardTimeout((int, int) key) {
+    if (_disposed || _discardWaitKey != key) return;
+    if (game.phase != GamePhase.awaitingDiscard) return;
+    final p = game.players[game.current];
+    final tile = game.drawnTile ?? _ai.chooseDiscard(p.hand, p.meldCount);
+    _clearDiscardTimer();
+    game.discard(tile);
+    SoundService.instance.tap();
+    _notifyBroadcast();
+    _drive();
+  }
+
   void _setupClaims() {
     _responses = {};
     _awaiting.clear();
-    for (final opp in game.claimOpportunities) {
+    final opportunities = game.claimOpportunities;
+    // 사람/네트워크 참가자가 하나라도 경쟁 중이면, AI는 즉시 답을 내지
+    // 않고 무작위 시간만큼 "고민"한다 — 항상 즉시 응답하면 사람이
+    // 결정하기도 전에 AI가 채가는 것처럼 느껴진다는 피드백을 반영했다.
+    // 경쟁자가 전혀 없는 순수 AI-only 상황(사람이 관여 안 함)은 굳이
+    // 늦출 필요가 없어 기존처럼 즉시 처리한다.
+    final hasHumanCompetitor = opportunities.any((o) => !_isAiSeat(o.seat));
+    for (final opp in opportunities) {
       if (_isAiSeat(opp.seat)) {
-        _responses![opp.seat] = _aiClaimResponseFor(opp);
+        if (hasHumanCompetitor && aiClaimThinkMax > Duration.zero) {
+          _awaiting.add(opp.seat); // "🤔 고르는 중" 배너에 노출
+          _aiThinkTimers.add(Timer(_randomAiThink(), () {
+            _resolveAiThinking(opp.seat);
+          }));
+        } else {
+          _responses![opp.seat] = _aiClaimResponseFor(opp);
+        }
       } else {
         _awaiting.add(opp.seat);
         if (opp.seat == 0) humanClaimOpportunity = opp;
@@ -377,16 +498,58 @@ class NetHostController extends TableController {
     }
   }
 
-  /// 제한시간 초과: 아직 응답하지 않은 전원을 패스 처리.
+  /// 500ms ~ [aiClaimThinkMax] 사이의 무작위 지연. claimTimeout보다 먼저
+  /// 끝나도록 상한을 걸어, AI의 "생각"이 응답 제한시간에 잘려 강제
+  /// 패스되지 않게 한다.
+  Duration _randomAiThink() {
+    const minMs = 500;
+    final capMs =
+        min(aiClaimThinkMax.inMilliseconds, (claimTimeout.inMilliseconds * 0.85).round());
+    if (capMs <= minMs) return const Duration(milliseconds: minMs);
+    return Duration(milliseconds: minMs + _random.nextInt(capMs - minMs));
+  }
+
+  /// AI 좌석의 무작위 고민 시간이 끝나 실제 응답을 기록한다.
+  void _resolveAiThinking(int seat) {
+    if (_disposed || _responses == null || !_awaiting.contains(seat)) return;
+    final opp = _opportunityOf(seat);
+    if (opp == null) return; // 이미 라운드가 끝났음
+    final response = _aiClaimResponseFor(opp);
+    _responses![seat] = response;
+    _awaiting.remove(seat);
+    _onAwaitedResponse(seat, response);
+    _notifyBroadcast();
+    _drive();
+  }
+
+  void _cancelAiThinkTimers() {
+    for (final t in _aiThinkTimers) {
+      t.cancel();
+    }
+    _aiThinkTimers.clear();
+  }
+
+  /// 제한시간 초과: 아직 응답하지 않은 전원을 강제로 패스 처리한 뒤,
+  /// 그때까지 기록해둔 가장 먼저 온 뺏어오기 응답이 있으면 그걸로
+  /// 확정한다 (강제 패스도 "응답 도착" 이벤트로 취급해 같은 판정
+  /// 경로를 탄다).
   void _onClaimTimeout() {
     if (_disposed || _responses == null || _awaiting.isEmpty) return;
     humanClaimOpportunity = null;
     for (final seat in _awaiting.toList()) {
       _responses![seat] = const _ClaimResponse();
+      _awaiting.remove(seat);
     }
-    _awaiting.clear();
+    _tryFinalizeAwaitedClaim();
     _notifyBroadcast();
     _drive();
+  }
+
+  ClaimOpportunity? _opportunityOf(int seat) {
+    for (final o in game.claimOpportunities) {
+      if (o.seat == seat) return o;
+    }
+    return null;
   }
 
   _ClaimResponse _aiClaimResponse(int seat) {
@@ -407,32 +570,126 @@ class NetHostController extends TableController {
     if (_responses == null || !_awaiting.contains(seat)) return;
     _responses![seat] = response;
     _awaiting.remove(seat);
-    _notifyBroadcast(); // claimAwait 목록 갱신
+    _onAwaitedResponse(seat, response);
+    _notifyBroadcast();
     _drive();
   }
 
-  /// 우선순위(완성 > 뺏어오기, 동순위는 턴 순서)대로 응답을 처리한다.
+  /// "먼저 응답한 사람이 가져간다": 사람/네트워크 참가자가 하나라도
+  /// 관여하는 라운드([_awaiting] 경로)에서, 응답이 하나 도착할 때마다
+  /// 호출된다.
+  ///
+  /// - 완성은 도착한 순간 그 자리에서 바로 확정한다. 이보다 먼저 응답한
+  ///   사람은 있을 수 없으므로(방금 막 도착한 응답이니까) 기다릴 이유가
+  ///   없다.
+  /// - 뺏어오기는 가장 먼저 도착한 것만 기억해둔다. 완성 가능한 사람이
+  ///   아직 응답하지 않았다면, 그 사람이 나중에라도 완성을 선언하면
+  ///   완성이 항상 우선해야 하므로 곧바로 확정하지 않고 기다린다.
+  void _onAwaitedResponse(int seat, _ClaimResponse response) {
+    if (_responses == null) return; // 이미 다른 경로로 확정됨
+    final opp = _opportunityOf(seat);
+    if (opp == null) return;
+
+    if (response.win && opp.canWin) {
+      _finalizeAwaitedWin(seat);
+      return;
+    }
+    if (response.meld != null) {
+      _leadingClaimSeat ??= seat;
+      _leadingClaimMeld ??= response.meld;
+    }
+    _tryFinalizeAwaitedClaim();
+  }
+
+  /// 아직 응답하지 않은 완성 가능자가 없어졌다면, 기록해둔 가장 먼저
+  /// 온 뺏어오기 응답으로(있다면) 확정하거나, 아무도 안 가져갔다면
+  /// 유찰 처리한다.
+  void _tryFinalizeAwaitedClaim() {
+    if (_responses == null) return;
+    final winCapablePending =
+        game.claimOpportunities.any((o) => o.canWin && _awaiting.contains(o.seat));
+    if (winCapablePending) return; // 이 사람이 나중에 완성을 선언할 수도 있다
+
+    if (_leadingClaimSeat != null) {
+      _finalizeAwaitedClaim(_leadingClaimSeat!, _leadingClaimMeld!);
+    } else if (_awaiting.isEmpty) {
+      _finalizeAwaitedPass();
+    }
+  }
+
+  void _finalizeAwaitedWin(int seat) {
+    _claimTimer?.cancel();
+    _cancelAiThinkTimers();
+    final multiParty = game.claimOpportunities.length > 1;
+    _clearClaimRoundState();
+    game.declareRon(seat);
+    if (multiParty) _announceClaim(seat);
+  }
+
+  void _finalizeAwaitedClaim(int seat, Meld meld) {
+    final opp = _opportunityOf(seat);
+    _claimTimer?.cancel();
+    _cancelAiThinkTimers();
+    final multiParty = game.claimOpportunities.length > 1;
+    _clearClaimRoundState();
+    if (opp != null) {
+      for (final option in opp.options) {
+        if (option.meld == meld) {
+          game.applyClaim(seat, option);
+          SoundService.instance.claim();
+          if (multiParty) _announceClaim(seat);
+          return;
+        }
+      }
+    }
+    game.passClaims(); // 안전망: 선택지를 못 찾으면(이론상 발생 안 함) 유찰
+  }
+
+  void _finalizeAwaitedPass() {
+    _claimTimer?.cancel();
+    _cancelAiThinkTimers();
+    _clearClaimRoundState();
+    game.passClaims();
+  }
+
+  void _clearClaimRoundState() {
+    _responses = null;
+    _awaiting.clear();
+    humanClaimOpportunity = null;
+    _leadingClaimSeat = null;
+    _leadingClaimMeld = null;
+  }
+
+  /// AI끼리만 경쟁하는(사람이 전혀 관여하지 않는) 라운드를 우선순위
+  /// (완성 > 뺏어오기, 동순위는 턴 순서)대로 처리한다. 이 경로는 아무도
+  /// "누가 더 빨랐는지"를 보고 있지 않으므로 응답 도착 순서 대신
+  /// 고정된 턴 순서로 결정해도 무방하다.
   void _resolveClaims() {
     _claimTimer?.cancel();
+    _cancelAiThinkTimers();
     final responses = _responses ?? const <int, _ClaimResponse>{};
+    final opportunities = game.claimOpportunities;
+    final multiParty = opportunities.length > 1;
     _responses = null;
     _awaiting.clear();
     humanClaimOpportunity = null;
 
-    for (final opp in game.claimOpportunities) {
+    for (final opp in opportunities) {
       final r = responses[opp.seat];
       if (r != null && r.win && opp.canWin) {
         game.declareRon(opp.seat);
+        if (multiParty) _announceClaim(opp.seat);
         return;
       }
     }
-    for (final opp in game.claimOpportunities) {
+    for (final opp in opportunities) {
       final meld = responses[opp.seat]?.meld;
       if (meld == null) continue;
       for (final option in opp.options) {
         if (option.meld == meld) {
           game.applyClaim(opp.seat, option);
           SoundService.instance.claim();
+          if (multiParty) _announceClaim(opp.seat);
           return;
         }
       }
@@ -448,6 +705,7 @@ class NetHostController extends TableController {
         case 'discard':
           if (game.phase == GamePhase.awaitingDiscard &&
               game.current == seat) {
+            _clearDiscardTimer();
             game.discard(Tile.fromKey(msg['k'] as int));
             SoundService.instance.tap();
             _notifyBroadcast();
@@ -457,6 +715,7 @@ class NetHostController extends TableController {
           if (game.phase == GamePhase.awaitingDiscard &&
               game.current == seat &&
               game.canDeclareTsumo()) {
+            _clearDiscardTimer();
             game.declareTsumo();
             _notifyBroadcast();
           }
@@ -510,6 +769,10 @@ class NetHostController extends TableController {
   void dispose() {
     _disposed = true;
     _claimTimer?.cancel();
+    _discardTimer?.cancel();
+    _cancelAiThinkTimers();
+    _leadingClaimSeat = null;
+    _leadingClaimMeld = null;
     for (final c in _clients.values) {
       c.socket.destroy();
     }

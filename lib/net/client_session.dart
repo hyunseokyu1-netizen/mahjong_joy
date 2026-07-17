@@ -41,6 +41,10 @@ class NetClientController extends TableController {
   List<String?> lobbyNames = const [null, null, null, null];
 
   List<String?> _viewNames = const [null, null, null, null];
+
+  /// 나의 실제(회전 전) 좌석 번호. 첫 view가 도착해야 알 수 있으므로
+  /// 그 전에는 회전이 없다고 가정(0)한다.
+  int _mySeat = 0;
   bool _simple = false;
   List<int> _claimAwait = const [];
   bool _claimAwaitMe = false;
@@ -97,6 +101,7 @@ class NetClientController extends TableController {
         notice.value = TableNotice(
           TableNoticeKind.values.byName(msg['kind'] as String),
           msg['name'] as String,
+          seat: msg['seat'] as int?,
         );
       case 'view':
         _applyView(msg);
@@ -112,6 +117,7 @@ class NetClientController extends TableController {
     _claimAwaitMe = _claimAwait.contains(0);
     if (!_claimAwaitMe) _sentClaimResponse = false;
     _viewNames = (v['names'] as List).cast<String?>();
+    _mySeat = v['mySeat'] as int;
     _simple = v['simple'] as bool;
     status = NetClientStatus.playing;
     _reconnectTries = 0; // view가 오면 연결이 건강하다는 뜻
@@ -203,8 +209,17 @@ class NetClientController extends TableController {
   @override
   List<int> get claimWaitingSeats => _claimAwait;
 
+  /// 호스트의 강제 버리기 제한시간과 같은 상수. 프로토콜에 값이
+  /// 실려오지 않으므로 [turnTimeLimit]을 공유해 맞춘다 (카운트다운
+  /// 표시 전용 — 실제 강제는 호스트가 한다).
+  @override
+  Duration? get discardTimeLimit => turnTimeLimit;
+
   @override
   List<String?>? get seatNames => _viewNames;
+
+  @override
+  int actualSeatOf(int seat) => (seat + _mySeat) % 4;
 
   @override
   bool get isFinished =>

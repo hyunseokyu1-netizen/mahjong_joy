@@ -21,7 +21,7 @@ class MahjongJoyApp extends StatelessWidget {
     return ChangeNotifierProvider.value(
       value: settings,
       child: MaterialApp(
-        title: 'Mahjong Joy',
+        title: settings.strings.appTitle,
         debugShowCheckedModeBanner: false,
         theme: Palette.theme(),
         home: const HomeScreen(),

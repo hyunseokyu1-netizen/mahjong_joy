@@ -1,0 +1,1 @@
+Real 4-player mahjong, simple scoring. No yaku to memorize. AI & LAN play.

@@ -21,6 +21,11 @@ const int discoveryPort = 47777;
 const String discoveryPing = 'MJJOY?';
 const String discoveryReplyPrefix = 'MJJOY!';
 
+/// 버리기 차례 제한시간. 호스트가 강제하는 값이자, 클라이언트가
+/// 카운트다운 UI에 쓰는 값 — 프로토콜에 값이 실려오지 않으므로
+/// 양쪽이 이 상수를 공유해 맞춘다.
+const Duration turnTimeLimit = Duration(seconds: 15);
+
 List<int> tileKeys(List<Tile> tiles) => [for (final t in tiles) t.key];
 
 List<Tile> tilesFromKeys(List<dynamic> keys) =>
@@ -69,9 +74,10 @@ Map<String, dynamic> passMessage() => {'type': 'pass'};
 Map<String, dynamic> lobbyMessage(List<String?> names) =>
     {'type': 'lobby', 'names': names};
 
-/// 방 전체 알림: 참가자 퇴장('left')/복귀('rejoined').
-Map<String, dynamic> eventMessage(String kind, String name) =>
-    {'type': 'event', 'kind': kind, 'name': name};
+/// 방 전체 알림: 참가자 퇴장('left')/복귀('rejoined')/뺏어오기('claimed').
+/// [seat]는 'claimed' 전용이며, 받는 클라이언트 시점으로 이미 회전된 값이다.
+Map<String, dynamic> eventMessage(String kind, String name, {int? seat}) =>
+    {'type': 'event', 'kind': kind, 'name': name, 'seat': ?seat};
 
 Map<String, dynamic> fullMessage() => {'type': 'full'};
 
@@ -112,6 +118,11 @@ Map<String, dynamic> buildView({
     'wall': game.wallCount,
     'players': players,
     'names': viewNames,
+    // 참가자 자신의 실제(회전 전) 좌석 번호. AI/빈 좌석 이름은 각자
+    // 로컬 언어로 채우는데, 그 기준을 "화면에 보이는 위치"가 아니라
+    // 이 실제 좌석 번호로 잡아야 같은 AI가 참가자마다 다른 이름으로
+    // 보이지 않는다 (자세한 이유는 game_screen.dart의 _nameOf 참고).
+    'mySeat': forSeat,
     'myHand': tileKeys(game.players[forSeat].hand),
     'drawn': game.current == forSeat ? game.drawnTile?.key : null,
     'lastDiscard': game.lastDiscard?.key,

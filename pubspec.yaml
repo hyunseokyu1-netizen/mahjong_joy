@@ -1,7 +1,7 @@
 name: mahjong_joy
-description: "A new Flutter project."
+description: "짝 맞추기의 재미만 남긴 심플 마작 — AI 대전과 LAN 멀티플레이."
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.1.0+4
 
 environment:
   sdk: ^3.12.2

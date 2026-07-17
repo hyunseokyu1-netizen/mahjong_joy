@@ -1,0 +1,11 @@
+[1.1.0] Turn timer display ⏱
+• In network games, the remaining time (15s) for your discard turn is now shown on screen
+• The last 5 seconds count down as a big red number in the center — no more surprise auto-discards
+• Fixed a stall where the game could freeze if time ran out right after claiming a tile
+
+[1.0.0] Initial release! 🎉
+• Play with AI — solo play, AI fills the rest
+• LAN multiplayer — up to 4 players on the same Wi-Fi
+• Score receipt animation, 15s claim/win response timer
+• When multiple players race for the same tile, the first to respond wins it (AI follows the same rule)
+• Korean, Chinese, English support, plus Beginner Mode

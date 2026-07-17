@@ -1,0 +1,25 @@
+Real 4-player mahjong — Mahjong Round.
+
+If you ever gave up on mahjong because of yaku, han, and fu scoring, start over with Mahjong Round. There's exactly one shape to remember: arrange 14 tiles into 4 sets (straights or triples) + 1 pair, and you win.
+
+🎯 That's it — no hands to memorize
+- No yaku, no scoring tables. Just "4 sets + 1 pair"
+- Friendly tile art: 3 number suits (orange, bear, flower) and 7 weather tiles (sun, cloud, star...) instead of intimidating characters
+- ✨Waiting tiles✨ show on screen so you always know how close you are
+
+🧾 A score receipt that's actually fun
+Win a round and watch a receipt animation add up your score line by line — base 100 points, plus bonuses like Weather Set, All Straights, or One Color, each with its own multiplier.
+
+🤖 Play with AI
+You're always seat 0. The other three seats are filled by AI, so you can start a full 4-player game solo, anytime.
+
+📶 Play with Friends over LAN
+Create a room on the same Wi-Fi and up to 4 people can play together — no server required, no login. Rooms are found automatically, and a 15-second response timer keeps the game moving even if someone's thinking it over.
+
+🌏 Three languages
+Korean, Chinese, and English, with automatic detection based on your device language.
+
+🐣 Beginner Mode
+Flip one switch to drop scoring entirely and just focus on building sets — great for playing with kids.
+
+Forget what you know about mahjong being hard. Mahjong Round keeps the rules simple — but the match is real.

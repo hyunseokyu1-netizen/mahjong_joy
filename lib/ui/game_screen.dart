@@ -23,9 +23,20 @@ String _fmt(int n) => n
     .toString()
     .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 
-/// 좌석 표시 이름: 네트워크 대전이면 참가자 이름, 아니면 언어 기본 이름.
+/// 좌석 표시 이름: 참가자면 실제 이름, AI/빈 좌석이면 언어 기본 이름.
+///
+/// 기본 이름은 [gc.actualSeatOf]로 얻은 "실제(회전 전) 좌석 번호"로
+/// 고른다 — [seat]는 내 화면 기준으로 회전된 위치라 참가자마다
+/// 다르므로, 이걸로 이름을 고르면 같은 AI가 사람마다 다른 이름으로
+/// 보인다(예: 한쪽엔 "야옹이", 다른 쪽엔 "토끼").
 String _nameOf(TableController gc, Strings s, int seat) =>
-    gc.seatNames?[seat] ?? s.playerNames[seat];
+    gc.seatNames?[seat] ?? s.playerNames[gc.actualSeatOf(seat)];
+
+/// 좌석 아바타 이모지. [_nameOf]와 같은 이유로 실제 좌석 기준으로
+/// 골라야 한다 — 그렇지 않으면 이름과 아바타가 서로 다른 AI를
+/// 가리키는(예: "곰돌이"인데 🐰가 뜨는) 불일치가 생긴다.
+String _avatarOf(TableController gc, int seat) =>
+    _avatars[gc.actualSeatOf(seat)];
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -52,14 +63,19 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  /// 참가자 퇴장/복귀 알림을 방 전체에 스낵바로 띄운다.
+  /// 참가자 퇴장/복귀, 여러 명이 동시에 노린 패를 누가 가져갔는지를
+  /// 방 전체에 스낵바로 띄운다. "가져가기를 눌렀는데 반응이 없다"는
+  /// 오해를 막기 위한 알림이다.
   void _onNotice() {
     final n = _gc.notice.value;
     if (n == null || !mounted) return;
+    // 내가 가져간 경우는 이미 알고 있으니("나님이 가져갔어요") 알림 생략.
+    if (n.kind == TableNoticeKind.claimed && n.seat == 0) return;
     final s = context.read<AppSettings>().strings;
     final text = switch (n.kind) {
       TableNoticeKind.left => s.playerLeft(n.name),
       TableNoticeKind.rejoined => s.playerRejoined(n.name),
+      TableNoticeKind.claimed => s.claimedBy(_nameOf(_gc, s, n.seat!)),
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(text, style: const TextStyle(fontSize: 14)),
@@ -218,6 +234,11 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
               ),
+            if (gc.isHumanDiscardTurn && gc.discardTimeLimit != null)
+              _TurnTimer(
+                key: ValueKey('turn-timer-${gc.game.wallCount}'),
+                limit: gc.discardTimeLimit!,
+              ),
             if (gc.humanClaimOpportunity != null)
               _ClaimPrompt(key: ValueKey(gc.game.lastDiscard)),
             if (gc.isFinished) const _ResultOverlay(),
@@ -254,7 +275,7 @@ class _OpponentPanel extends StatelessWidget {
         width: isTurn ? 2 : 1,
       ),
     );
-    final nameText = Text('${_avatars[seat]} ${_nameOf(gc, s, seat)}',
+    final nameText = Text('${_avatarOf(gc, seat)} ${_nameOf(gc, s, seat)}',
         style: const TextStyle(
             fontWeight: FontWeight.bold, color: Palette.textBrown));
     final scoreText = Text(
@@ -348,40 +369,90 @@ class _CenterTable extends StatelessWidget {
         builder: (context, constraints) {
           final capHeight =
               constraints.maxHeight.isFinite ? constraints.maxHeight * 0.32 : 160.0;
-          return Column(
+          return Stack(
+            alignment: Alignment.center,
             children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: capHeight),
-                child: const RotatedBox(
-                    quarterTurns: 2, child: _River(seat: 2)),
-              ),
-              const SizedBox(height: 4),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      flex: 5,
-                      child: RotatedBox(
-                          quarterTurns: 1, child: _River(seat: 3)),
+              Column(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: capHeight),
+                    child: const RotatedBox(
+                        quarterTurns: 2, child: _River(seat: 2)),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: RotatedBox(
+                              quarterTurns: 1, child: _River(seat: 3)),
+                        ),
+                        const Spacer(flex: 2),
+                        Expanded(
+                          flex: 5,
+                          child: RotatedBox(
+                              quarterTurns: 3, child: _River(seat: 1)),
+                        ),
+                      ],
                     ),
-                    const Spacer(flex: 2),
-                    Expanded(
-                      flex: 5,
-                      child: RotatedBox(
-                          quarterTurns: 3, child: _River(seat: 1)),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: capHeight),
+                    child: const _River(seat: 0),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: capHeight),
-                child: const _River(seat: 0),
-              ),
+              const _DiscardSpotlight(),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// 방금 버려져 완성/뺏어오기 응답을 기다리는 패를 테이블 정중앙에 크게
+/// 보여준다. 강에 쌓이는 타일은 14~22px로 작아서 뭐가 버려졌는지
+/// 빠르게 알아보기 어렵다는 피드백을 반영했다 — 응답 대기 중에는 누구나
+/// (당사자가 아니어도) 한눈에 확인할 수 있어야 "AI가 순식간에 가져갔다"는
+/// 느낌 대신 무슨 일이 있었는지 이해하고 넘어갈 수 있다.
+class _DiscardSpotlight extends StatelessWidget {
+  const _DiscardSpotlight();
+
+  @override
+  Widget build(BuildContext context) {
+    final gc = context.watch<TableController>();
+    final game = gc.game;
+    final discarded = game.lastDiscard;
+    if (game.phase != GamePhase.awaitingClaims || discarded == null) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        // 매번 새로 버려진 패마다 애니메이션이 다시 재생되도록 키를 바꾼다.
+        key: ValueKey('spotlight-${game.wallCount}-${discarded.key}'),
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutBack,
+        builder: (context, t, child) => Opacity(
+          opacity: t.clamp(0, 1),
+          child: Transform.scale(scale: 0.6 + 0.4 * t, child: child),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 14, spreadRadius: 1),
+            ],
+          ),
+          child: TileWidget(discarded, size: 60, highlighted: true),
+        ),
       ),
     );
   }
@@ -529,7 +600,7 @@ class _HumanPanel extends StatelessWidget {
             ),
           Row(
             children: [
-              Text('${_avatars[0]} ${_nameOf(gc, s, 0)}',
+              Text('${_avatarOf(gc, 0)} ${_nameOf(gc, s, 0)}',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, color: Palette.textBrown)),
               const SizedBox(width: 6),
@@ -636,6 +707,106 @@ class _HumanPanel extends StatelessWidget {
   }
 }
 
+/// 네트워크 대전에서 내 버리기 차례의 남은 시간 카운트다운.
+///
+/// 호스트가 제한시간이 지나면 자동으로 버리는데, 남은 시간이 안 보여
+/// "갑자기 멋대로 버려졌다"고 느껴진다는 피드백을 반영했다. 평소에는
+/// 상단 중앙의 작은 배지로 보여주다가, 마지막 5초는 테이블 정중앙에
+/// 큰 빨간 숫자를 띄워 곧 자동으로 버려진다는 긴장감을 준다.
+///
+/// 표시 전용이다 — 실제 강제 버리기는 호스트 타이머가 하므로, 0이
+/// 되면 그대로 멈춰서 호스트의 처리(상태 갱신 → 이 위젯 제거)를
+/// 기다린다.
+class _TurnTimer extends StatefulWidget {
+  final Duration limit;
+
+  const _TurnTimer({super.key, required this.limit});
+
+  @override
+  State<_TurnTimer> createState() => _TurnTimerState();
+}
+
+class _TurnTimerState extends State<_TurnTimer> {
+  static const _urgentSeconds = 5;
+
+  late int _remaining = widget.limit.inSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_remaining <= 0) return;
+      setState(() => _remaining--);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_remaining > _urgentSeconds) {
+      return Positioned(
+        top: 48,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: IgnorePointer(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Palette.mint, width: 1.5),
+              ),
+              child: Text(
+                '⏱ $_remaining',
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Palette.textBrown),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 마지막 5초: 매 초 튀어나오는 큰 빨간 숫자로 긴박함을 준다.
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey(_remaining),
+            tween: Tween(begin: 1.6, end: 1.0),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: Text(
+              '$_remaining',
+              style: const TextStyle(
+                fontSize: 110,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFE53935),
+                shadows: [
+                  Shadow(color: Colors.white, blurRadius: 24),
+                  Shadow(color: Colors.white, blurRadius: 48),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 완성/뺏어오기 응답 프롬프트. 15초 안에 답하지 않으면 자동 패스해
 /// 다른 참가자를 기다리게 하지 않는다.
 class _ClaimPrompt extends StatefulWidget {
@@ -696,7 +867,7 @@ class _ClaimPromptState extends State<_ClaimPrompt> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TileWidget(discarded, size: 30, highlighted: true),
+                  TileWidget(discarded, size: 40, highlighted: true),
                   const SizedBox(width: 8),
                   Text(s.claimQuestion,
                       style: const TextStyle(
@@ -783,10 +954,10 @@ class _ResultOverlay extends StatelessWidget {
       emoji = winner == GameController.humanSeat ? '🎉' : '😯';
       title = winner == GameController.humanSeat
           ? s.iWonTitle
-          : s.otherWon('${_avatars[winner]} ${_nameOf(gc, s, winner)}');
+          : s.otherWon('${_avatarOf(gc, winner)} ${_nameOf(gc, s, winner)}');
       if (result.winType == WinType.ron) {
         final loser =
-            '${_avatars[result.loser!]} ${_nameOf(gc, s, result.loser!)}';
+            '${_avatarOf(gc, result.loser!)} ${_nameOf(gc, s, result.loser!)}';
         subtitle = simple
             ? s.simpleRonSub(loser)
             : s.ronSub(loser, s.points(_fmt(result.value)));
@@ -889,7 +1060,7 @@ class _ResultOverlay extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 90,
-                    child: Text('${_avatars[seat]} ${_nameOf(gc, s, seat)}',
+                    child: Text('${_avatarOf(gc, seat)} ${_nameOf(gc, s, seat)}',
                         style: const TextStyle(color: Palette.textBrown),
                         overflow: TextOverflow.ellipsis),
                   ),
@@ -958,7 +1129,7 @@ class _ResultOverlay extends StatelessWidget {
         const SizedBox(height: 8),
         for (var i = 0; i < ranking.length; i++)
           Text(
-            '${medals[i]}  ${_avatars[ranking[i]]} ${_nameOf(gc, s, ranking[i])} '
+            '${medals[i]}  ${_avatarOf(gc, ranking[i])} ${_nameOf(gc, s, ranking[i])} '
             '· ${simple ? s.wins(gc.match.winCounts[ranking[i]]) : s.points(_fmt(gc.match.scores[ranking[i]]))}',
             style: TextStyle(
               fontSize: i == 0 ? 16 : 14,

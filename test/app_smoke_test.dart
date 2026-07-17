@@ -35,6 +35,15 @@ Future<void> pumpUntilHumanInput(
   fail('사람 입력 지점에 도달하지 못함');
 }
 
+/// 네트워크 대전처럼 버리기 제한시간이 있는 컨트롤러 흉내
+/// (턴 타이머 UI 테스트용).
+class _TimedController extends GameController {
+  _TimedController({super.seed});
+
+  @override
+  Duration? get discardTimeLimit => const Duration(seconds: 15);
+}
+
 /// 결과 영수증 애니메이션 타이머가 남지 않도록 트리를 내려서 정리한다.
 Future<void> tearDownTree(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
@@ -48,7 +57,7 @@ void main() {
   testWidgets('메인화면: 시작 버튼과 설명서 메뉴가 동작한다', (tester) async {
     await tester.pumpWidget(
         MahjongJoyApp(settings: AppSettings(lang: AppLang.ko)));
-    expect(find.text('Mahjong Joy'), findsOneWidget);
+    expect(find.text('마작한판'), findsOneWidget);
     expect(find.text('🤖 AI와 하기'), findsOneWidget);
     expect(find.text('📶 친구와 하기'), findsOneWidget);
     // 언어 선택과 초보자 모드 설정이 보인다
@@ -88,6 +97,36 @@ void main() {
     expect(find.text('🐱 야옹이'), findsOneWidget);
 
     gc.dispose();
+  });
+
+  testWidgets('버리기 제한시간이 있으면 카운트다운이 보이고 마지막 5초는 크게 표시된다',
+      (tester) async {
+    final gc = _TimedController(seed: 7);
+    await tester.pumpWidget(app(gc));
+
+    // 내 차례 시작: 상단 배지에 남은 시간 표시
+    expect(gc.isHumanDiscardTurn, isTrue);
+    expect(find.text('⏱ 15'), findsOneWidget);
+
+    // 손패 타일의 숫자와 겹치지 않게, 중앙의 큰 숫자만 골라 찾는다.
+    Finder bigNumber(String n) => find.byWidgetPredicate(
+        (w) => w is Text && w.data == n && (w.style?.fontSize ?? 0) > 100);
+
+    // 10초 경과 → 마지막 5초 구간: 중앙 큰 숫자로 전환
+    await tester.pump(const Duration(seconds: 10));
+    expect(find.text('⏱ 5'), findsNothing);
+    expect(bigNumber('5'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(bigNumber('4'), findsOneWidget);
+
+    // 패를 버리면 (내 차례가 끝나면) 타이머가 사라진다
+    gc.humanDiscard(gc.human.hand.first);
+    await tester.pump();
+    expect(bigNumber('4'), findsNothing);
+
+    await pumpUntilHumanInput(tester, gc);
+    gc.dispose();
+    await tearDownTree(tester);
   });
 
   testWidgets('패를 버리면 AI 턴이 진행되고 다시 입력 지점으로 돌아온다', (tester) async {
