@@ -1,10 +1,11 @@
 import '../logic/score.dart';
 
 /// 지원 언어. 기기 언어가 목록에 없으면 영어.
-enum AppLang { ko, zh, en }
+enum AppLang { ko, ja, zh, en }
 
 AppLang langFromCode(String code) => switch (code) {
       'ko' => AppLang.ko,
+      'ja' => AppLang.ja,
       'zh' => AppLang.zh,
       _ => AppLang.en,
     };
@@ -12,12 +13,14 @@ AppLang langFromCode(String code) => switch (code) {
 /// 언어 선택 버튼에 쓰는 자기 언어 표기 (항상 고정).
 const Map<AppLang, String> langNativeNames = {
   AppLang.ko: '한국어',
+  AppLang.ja: '日本語',
   AppLang.zh: '中文',
   AppLang.en: 'English',
 };
 
 Strings stringsOf(AppLang lang) => switch (lang) {
       AppLang.ko => _ko,
+      AppLang.ja => _ja,
       AppLang.zh => _zh,
       AppLang.en => _en,
     };
@@ -30,6 +33,7 @@ class Strings {
   final String playWithAi;
   final String playWithFriends;
   final String howToPlayBtn;
+  final String settingsTitle;
   final String languageLabel;
   final String beginnerTitle;
   final String beginnerSubtitle;
@@ -127,6 +131,7 @@ class Strings {
     required this.playWithAi,
     required this.playWithFriends,
     required this.howToPlayBtn,
+    required this.settingsTitle,
     required this.languageLabel,
     required this.beginnerTitle,
     required this.beginnerSubtitle,
@@ -258,6 +263,7 @@ const _ko = Strings(
   playWithAi: 'AI와 하기',
   playWithFriends: '친구와 하기',
   howToPlayBtn: '게임 설명서 📖',
+  settingsTitle: '설정',
   languageLabel: '언어',
   beginnerTitle: '초보자 모드',
   beginnerSubtitle: '점수 없이 조합만 맞춰요',
@@ -383,6 +389,7 @@ const _en = Strings(
   playWithAi: 'Play with AI',
   playWithFriends: 'Play with Friends',
   howToPlayBtn: 'How to Play 📖',
+  settingsTitle: 'Settings',
   languageLabel: 'Language',
   beginnerTitle: 'Beginner Mode',
   beginnerSubtitle: 'No scoring — just build sets and win',
@@ -513,6 +520,7 @@ const _zh = Strings(
   playWithAi: '和AI玩',
   playWithFriends: '和朋友玩',
   howToPlayBtn: '游戏说明 📖',
+  settingsTitle: '设置',
   languageLabel: '语言',
   beginnerTitle: '新手模式',
   beginnerSubtitle: '不计分，只专心组牌',
@@ -628,4 +636,131 @@ const _zh = Strings(
       '7种天气牌没有数字，只能用作刻子或对子。',
   meldLabel: '组',
   headLabel: '对',
+);
+
+const _ja = Strings(
+  appTitle: '麻雀一局',
+  tagline: '麻雀一局 — 本気で対戦する4人麻雀',
+  playWithAi: 'AIと遊ぶ',
+  playWithFriends: '友だちと遊ぶ',
+  howToPlayBtn: '遊び方 📖',
+  settingsTitle: '設定',
+  languageLabel: '言語',
+  beginnerTitle: '初心者モード',
+  beginnerSubtitle: '点数なしで、そろえるだけ',
+  yourName: 'なまえ',
+  createRoom: 'ルームを作る',
+  findRooms: 'ルームを探す',
+  roomFmt: '{name}のルーム',
+  startWithAi: 'スタート（空席はAI）',
+  waitingForPlayers: '同じWi-Fiの友だちを待っています...',
+  searchingRooms: '同じWi-Fiでルームを探しています...',
+  noRoomsFound: 'まだルームがありません。友だちが作るとここに表示されます。',
+  joinBtn: '参加',
+  waitingHostStart: 'ホストのスタートを待っています...',
+  waitingHostNext: 'ホストを待っています...',
+  connectionLost: '接続が切れました',
+  reconnecting: '接続が不安定です — 再接続中...',
+  decidingFmt: '{name}が考え中...',
+  playerLeftFmt: '👋 {name}さんが退出しました — AIが代わりに打ちます',
+  playerRejoinedFmt: '🎉 {name}さんが戻ってきました！',
+  claimedByFmt: '🀄 {name}さんが先に取りました',
+  roomFull: 'ルームは満員です',
+  playerNames: ['わたし', 'うさぎ', 'くまさん', 'にゃんこ'],
+  homeTooltip: 'メインへ',
+  muteTooltip: 'サウンドを消す',
+  unmuteTooltip: 'サウンドを出す',
+  roundFmt: '{c}局目 / {t}',
+  wallLeftFmt: '残り{n}枚',
+  waitingLabel: '✨ 待ち牌: ',
+  chooseDiscard: '捨てる牌を選んでください',
+  canComplete: 'あがれます！',
+  completeBtn: 'あがり！🎉',
+  claimQuestion: 'この牌、もらいますか？',
+  passBtn: 'パス',
+  pointsFmt: '{n}点',
+  winsFmt: '{n}勝',
+  drawTitle: '流局 — この局は引き分け',
+  iWonTitle: 'あがり！わたしの勝ち！',
+  otherWonFmt: '{name}があがりました',
+  ronSubFmt: '{name}の捨て牌であがり — {name}が{pts}を全額支払い',
+  tsumoSubFmt: 'ツモあがり — 残りの3人で{pts}を分けて支払い',
+  simpleRonFmt: '{name}の捨て牌であがり！',
+  simpleTsumoSub: 'ツモあがり！',
+  finalRanking: '🏁 最終順位',
+  fourthPlace: '4位',
+  newMatch: '新しい対局',
+  toMain: 'メインへ',
+  nextRoundFmt: '次の局 ({c}/{t})',
+  receiptTitle: '🧾 得点レシート',
+  subtotalLabel: '小計',
+  totalLabel: '合計 🎉',
+  bonusNames: {
+    ScoreBonus.base: '基本あがり',
+    ScoreBonus.weatherSet: 'お天気セット',
+    ScoreBonus.selfDraw: 'ツモった！',
+    ScoreBonus.allStraight: 'オールストレート',
+    ScoreBonus.lastCatch: 'ラストキャッチ',
+    ScoreBonus.solo: '自分の力で',
+    ScoreBonus.halfHalf: 'ハーフ＆ハーフ',
+    ScoreBonus.allTriple: 'オールトリプル',
+    ScoreBonus.oneColor: 'ワンカラー',
+    ScoreBonus.allWeather: 'オールウェザー',
+  },
+  bonusDetails: {
+    ScoreBonus.base: 'セット4つ + ペア1つ',
+    ScoreBonus.weatherSet: '同じお天気牌3枚のセット',
+    ScoreBonus.selfDraw: '自分で引いた牌であがり',
+    ScoreBonus.allStraight: '4セットすべて連続数字',
+    ScoreBonus.lastCatch: '残り{n}枚以下で劇的あがり',
+    ScoreBonus.solo: '牌をもらわずにあがり',
+    ScoreBonus.halfHalf: '数字牌1種類 + お天気牌',
+    ScoreBonus.allTriple: '4セットすべて同じ牌3枚',
+    ScoreBonus.oneColor: '1種類の数字牌だけであがり',
+    ScoreBonus.allWeather: 'すべてお天気牌であがり！',
+  },
+  bonusRewards: {
+    ScoreBonus.weatherSet: '1つにつき+50点',
+    ScoreBonus.selfDraw: '+100点',
+    ScoreBonus.allStraight: '+200点',
+    ScoreBonus.lastCatch: '+200点',
+    ScoreBonus.solo: '×2',
+    ScoreBonus.halfHalf: '×2',
+    ScoreBonus.allTriple: '×3',
+    ScoreBonus.oneColor: '×5',
+  },
+  manualTitle: '遊び方',
+  goalTitle: '🎯 目標',
+  goalBody: '14枚の牌を「セット4つ + ペア1つ」にそろえたら勝ち！\n'
+      '役を覚える必要はありません。この形ひとつだけでOK。',
+  straightName: 'ストレート（セット）',
+  straightDesc: '同じ種類の連続した数字3枚',
+  tripleName: 'トリプル（セット）',
+  tripleDesc: 'まったく同じ牌3枚',
+  headName: 'ペア',
+  headDesc: 'まったく同じ牌2枚',
+  flowTitle: '🔄 進め方',
+  flowBody: '自分の番になったら山から1枚引いて、いらない牌を1枚捨てます。\n'
+      'あがりに近づくと、画面に✨待ち牌✨が表示されます。',
+  claimTitle: '⚡ もらう',
+  claimBody: '誰が捨てた牌でも、自分のセットが完成するならもらえます！\n'
+      'もらったセットはみんなに公開され、代わりに手牌を1枚捨てます。',
+  completeTitle: '🏆 あがり',
+  completeBody: '自分で引いた牌でも、誰かの捨て牌でも、'
+      '3-3-3-3-2がそろった瞬間にあがりを宣言しましょう！',
+  scoreTitle: '💰 点数',
+  scoreBodyFmt: 'みんな{start}点からスタートして{rounds}局勝負。\n\n'
+      '• あがると得点レシートが出ます：基本{base}点 + ボーナス！\n'
+      '• 捨て牌であがり → 捨てた人が全額支払い！\n'
+      '• ツモあがり → 残りの3人で等分して支払い。\n'
+      '• 0点以下になった人が出たら、対局はそこで終了。',
+  bonusTitle: '🌟 ボーナス',
+  bonusIntro: 'まず足して、それから掛ける！',
+  plusHeader: '足し算ボーナス',
+  timesHeader: '掛け算ボーナス',
+  tilesTitle: '🀄 牌の紹介',
+  tilesBody: '数字牌は3種類（みかん🍊 · くま🐻 · はな🌸）、1〜9が各4枚。\n'
+      'お天気牌7種類は数字がないので、トリプルかペアにしか使えません。',
+  meldLabel: 'セット',
+  headLabel: 'ペア',
 );

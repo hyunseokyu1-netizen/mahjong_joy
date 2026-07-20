@@ -6,9 +6,9 @@ void main() {
   group('언어 매핑', () {
     test('지원 언어는 그대로, 그 외에는 영어', () {
       expect(langFromCode('ko'), AppLang.ko);
+      expect(langFromCode('ja'), AppLang.ja);
       expect(langFromCode('zh'), AppLang.zh);
       expect(langFromCode('en'), AppLang.en);
-      expect(langFromCode('ja'), AppLang.en);
       expect(langFromCode('de'), AppLang.en);
     });
   });

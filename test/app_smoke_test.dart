@@ -60,10 +60,27 @@ void main() {
     expect(find.text('마작한판'), findsOneWidget);
     expect(find.text('🤖 AI와 하기'), findsOneWidget);
     expect(find.text('📶 친구와 하기'), findsOneWidget);
-    // 언어 선택과 초보자 모드 설정이 보인다
-    expect(find.text('한국어'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
+    // 초보자 모드 토글은 메인에 있다
     expect(find.text('초보자 모드'), findsOneWidget);
+
+    // 설정 화면으로 이동: 언어 선택이 보인다
+    await tester.tap(find.byIcon(Icons.settings_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('한국어'), findsOneWidget);
+    expect(find.text('日本語'), findsOneWidget);
+    expect(find.text('中文'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+
+    // 언어를 일본어로 바꾸면 즉시 반영되고, 다시 한국어로 되돌린다
+    await tester.tap(find.text('日本語'));
+    await tester.pump();
+    expect(find.text('設定'), findsOneWidget);
+    await tester.tap(find.text('한국어'));
+    await tester.pump();
+    expect(find.text('설정'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     // 설명서로 이동했다가 돌아온다
     await tester.tap(find.text('게임 설명서 📖'));

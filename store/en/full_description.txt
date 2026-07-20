@@ -16,8 +16,8 @@ You're always seat 0. The other three seats are filled by AI, so you can start a
 📶 Play with Friends over LAN
 Create a room on the same Wi-Fi and up to 4 people can play together — no server required, no login. Rooms are found automatically, and a 15-second response timer keeps the game moving even if someone's thinking it over.
 
-🌏 Three languages
-Korean, Chinese, and English, with automatic detection based on your device language.
+🌏 Four languages
+Korean, Japanese, Chinese, and English, with automatic detection based on your device language.
 
 🐣 Beginner Mode
 Flip one switch to drop scoring entirely and just focus on building sets — great for playing with kids.

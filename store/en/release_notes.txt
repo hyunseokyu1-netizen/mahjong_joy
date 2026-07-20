@@ -1,3 +1,8 @@
+[1.2.0] Japanese support & settings screen 🇯🇵
+• Added Japanese (日本語) — device language is detected automatically
+• Language selection moved from the main screen to a new settings screen (⚙️ top-right)
+• The Beginner Mode switch stays on the main screen
+
 [1.1.0] Turn timer display ⏱
 • In network games, the remaining time (15s) for your discard turn is now shown on screen
 • The last 5 seconds count down as a big red number in the center — no more surprise auto-discards
